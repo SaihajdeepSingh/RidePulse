@@ -179,15 +179,6 @@
               <option value="60">60-seat</option>
             </select>
           </div>
-
-          <div class="flex items-center gap-2 bg-[#090D16] border border-white/10 rounded-xl px-3 py-2 text-xs">
-            <span class="text-slate-400">Time</span>
-            <select id="commuter-time" class="bg-transparent font-semibold text-white focus:outline-none cursor-pointer mono [&>option]:bg-[#0F1523]">
-              <option value="07:15">07:15</option>
-              <option value="07:30" selected>07:30</option>
-              <option value="07:45">07:45</option>
-            </select>
-          </div>
         </div>
       </div>
 
@@ -626,6 +617,7 @@
       const stop = appState.stops.find((s) => s.Stop_ID === stopId);
       if (!stop) return;
       appState.selectedStopId = stopId;
+      appState.selectedDepartureTime = null;
       document.getElementById("stop-search-input").value = `${stop.Stop_Name} (R${stop.Route_ID})`;
       document.getElementById("clear-search-btn").classList.remove("hidden");
       document.getElementById("stop-dropdown").classList.add("hidden");
@@ -673,7 +665,7 @@
       if (!appState.selectedStopId) return;
       const cap = document.getElementById("commuter-capacity").value;
       const day = document.getElementById("commuter-day").value;
-      const time = document.getElementById("commuter-time").value;
+      const time = appState.selectedDepartureTime || "07:30";
 
       const params = new URLSearchParams({
         stop_id: appState.selectedStopId,
@@ -687,7 +679,8 @@
       document.getElementById("c-route-badge").textContent = `R${data.stop.Route_ID}`;
       document.getElementById("c-stop-name").textContent = data.stop.Stop_Name;
       document.getElementById("c-stop-id").textContent = data.stop.Stop_ID;
-      document.getElementById("c-subline").textContent = `${data.day} · ${data.departure_time} · ${data.weather}`;
+      const displayTime = appState.selectedDepartureTime || (data.departures[0] ? data.departures[0].scheduled_time : data.departure_time);
+      document.getElementById("c-subline").textContent = `${data.day} · ${displayTime} · ${data.weather}`;
 
       document.getElementById("c-pax").textContent = data.predicted_passengers;
       document.getElementById("c-cap-sub").textContent = `/ ${data.bus_capacity} seats`;
@@ -727,7 +720,7 @@
       renderBusCabinSVG(data.bus_capacity, data.predicted_passengers);
       renderDepartureSparkline(data.departures, data.bus_capacity);
 
-      const activeTime = document.getElementById("commuter-time").value;
+      const activeTime = appState.selectedDepartureTime || (data.departures[0] ? data.departures[0].scheduled_time : null);
       document.getElementById("departures-list").innerHTML = data.departures
         .map((d) => {
           const dotColor = d.occupancy_percentage > 100 ? "#F43F5E" : d.occupancy_percentage > 80 ? "#F59E0B" : "#10B981";
@@ -753,12 +746,7 @@
 
       document.querySelectorAll(".dep-row").forEach((btn) => {
         btn.addEventListener("click", () => {
-          const t = btn.dataset.depTime;
-          const timeSel = document.getElementById("commuter-time");
-          if (![...timeSel.options].some((o) => o.value === t)) {
-            timeSel.add(new Option(t, t));
-          }
-          timeSel.value = t;
+          appState.selectedDepartureTime = btn.dataset.depTime;
           loadCommuterForecast();
         });
       });
@@ -1001,7 +989,6 @@
 
     document.getElementById("commuter-day").addEventListener("change", loadCommuterForecast);
     document.getElementById("commuter-capacity").addEventListener("change", loadCommuterForecast);
-    document.getElementById("commuter-time").addEventListener("change", loadCommuterForecast);
 
     // Operator events
     document.querySelectorAll(".op-filter-btn").forEach((btn) => {
