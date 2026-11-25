@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, File, HTTPException, Query, UploadFile
+from fastapi import FastAPI, File, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel, Field
@@ -12,10 +13,25 @@ from ml_pipeline import BusPassengerPipeline
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
 
+pipeline = BusPassengerPipeline()
+
+
+def ensure_pipeline_ready() -> None:
+    if not pipeline.metrics:
+        pipeline.fit()
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    ensure_pipeline_ready()
+    yield
+
+
 app = FastAPI(
     title="Bus Passenger Count Prediction API",
     description="Interactive ML analytics and live passenger crowding prediction API.",
     version="1.0.0",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
@@ -25,12 +41,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-pipeline = BusPassengerPipeline()
 
-
-@app.on_event("startup")
-def startup_event() -> None:
-    pipeline.fit()
+@app.middleware("http")
+async def ensure_ready_middleware(request: Request, call_next):
+    ensure_pipeline_ready()
+    return await call_next(request)
 
 
 class PredictRequest(BaseModel):

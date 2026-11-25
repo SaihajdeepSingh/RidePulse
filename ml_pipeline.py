@@ -111,7 +111,7 @@ def build_single_feature_models() -> dict[str, Any]:
             max_depth=5, random_state=RANDOM_STATE
         ),
         "Random Forest Regression": RandomForestRegressor(
-            n_estimators=300, min_samples_leaf=3, random_state=RANDOM_STATE, n_jobs=-1
+            n_estimators=300, min_samples_leaf=3, random_state=RANDOM_STATE, n_jobs=1
         ),
         "SVR (RBF)": make_pipeline(
             StandardScaler(), SVR(C=10, epsilon=0.1, kernel="rbf")
@@ -258,7 +258,7 @@ class BusPassengerPipeline:
                 y_train,
                 cv=tscv,
                 scoring={"mse": "neg_mean_squared_error"},
-                n_jobs=-1,
+                n_jobs=1,
             )
             cv_rmse = np.sqrt(-cv_scores["test_mse"])
 
@@ -325,17 +325,23 @@ class BusPassengerPipeline:
         final_model.fit(final_data[["Historical_Stop_Mean"]], final_data[TARGET].astype(float))
         self.final_single_model = final_model
 
-        joblib.dump(
-            {
-                "model": final_model,
-                "model_name": best_name,
-                "feature_columns": ["Historical_Stop_Mean"],
-                "target": TARGET,
-                "evaluation_metrics": rows[0],
-                "course_code": "24CSE0316",
-            },
-            MODEL_JOBLIB,
-        )
+        model_payload = {
+            "model": final_model,
+            "model_name": best_name,
+            "feature_columns": ["Historical_Stop_Mean"],
+            "target": TARGET,
+            "evaluation_metrics": rows[0],
+            "course_code": "24CSE0316",
+        }
+        try:
+            joblib.dump(model_payload, MODEL_JOBLIB)
+        except OSError:
+            # Serverless environments (e.g. Vercel) mount the code directory read-only.
+            tmp_model = Path("/tmp") / MODEL_JOBLIB.name
+            try:
+                joblib.dump(model_payload, tmp_model)
+            except OSError:
+                pass
 
         # Experiment B: Multiple Linear Regression with legitimate pre-trip features (Cell 26)
         self._fit_multiple_regression(train, test, y_train, y_test)
