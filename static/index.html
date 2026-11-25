@@ -1,0 +1,1057 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RidePulse — Smart Transit Crowding &amp; Fleet Control</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23090D16'/%3E%3Cpath d='M9 10a3 3 0 013-3h8a3 3 0 013 3v9a2 2 0 01-2 2v2h-2v-2H13v2h-2v-2a2 2 0 01-2-2v-9zm2 1v5h10v-5H11zm1.5 7.5a1.25 1.25 0 100-2.5 1.25 1.25 0 000 2.5zm7 0a1.25 1.25 0 100-2.5 1.25 1.25 0 000 2.5z' fill='%2310B981'/%3E%3C/svg%3E" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background-color: #070A11;
+      background-image:
+        radial-gradient(ellipse 80% 50% at 50% -20%, rgba(16, 185, 129, 0.12), transparent),
+        radial-gradient(ellipse 60% 40% at 90% 10%, rgba(56, 189, 248, 0.08), transparent);
+      color: #F1F5F9;
+    }
+    .mono { font-family: 'JetBrains Mono', monospace; }
+    .bento {
+      background: linear-gradient(180deg, rgba(20, 27, 45, 0.85) 0%, rgba(13, 18, 30, 0.92) 100%);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+      backdrop-filter: blur(16px);
+    }
+    .bento-inner {
+      background: rgba(9, 13, 22, 0.65);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+    }
+    .transit-pulse {
+      animation: pulse-ring 2.2s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+    }
+    @keyframes pulse-ring {
+      0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.6); }
+      70% { box-shadow: 0 0 0 8px rgba(16, 185, 129, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+    }
+    .gauge-arc {
+      transition: stroke-dashoffset 0.65s cubic-bezier(0.22, 1, 0.36, 1), stroke 0.3s ease;
+    }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, 0.25); border-radius: 999px; }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col antialiased selection:bg-emerald-500/30 selection:text-emerald-200">
+
+  <!-- Sleek Glass Header -->
+  <header class="sticky top-0 z-40 border-b border-white/10 bg-[#070A11]/85 backdrop-blur-xl">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
+      <!-- Left: Bespoke SVG Logo + Network Status -->
+      <div class="flex items-center gap-3.5">
+        <a href="#" class="flex items-center gap-3 group">
+          <div class="relative w-10 h-10 rounded-xl bg-[#0D1424] border border-emerald-400/30 flex items-center justify-center shadow-lg shadow-emerald-500/15 group-hover:border-emerald-400/60 transition">
+            <svg class="w-6 h-6" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <defs>
+                <linearGradient id="rpLogoGrad" x1="4" y1="3" x2="24" y2="25" gradientUnits="userSpaceOnUse">
+                  <stop offset="0%" stop-color="#34D399"/>
+                  <stop offset="100%" stop-color="#059669"/>
+                </linearGradient>
+              </defs>
+              <!-- Bus body -->
+              <rect x="6" y="4" width="16" height="17" rx="4" fill="url(#rpLogoGrad)" fill-opacity="0.16" stroke="url(#rpLogoGrad)" stroke-width="1.8"/>
+              <!-- Windshield with pulse line -->
+              <rect x="8.5" y="7" width="11" height="6.5" rx="1.8" fill="#070A11" stroke="url(#rpLogoGrad)" stroke-width="1.2"/>
+              <path d="M9.5 10.5H11.8L13 8.6L14.6 12L15.8 10.5H18.5" stroke="#34D399" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round"/>
+              <!-- Headlights -->
+              <circle cx="9.8" cy="17.2" r="1.25" fill="#34D399"/>
+              <circle cx="18.2" cy="17.2" r="1.25" fill="#34D399"/>
+              <!-- Wheels -->
+              <path d="M9.5 21.5V23.5M18.5 21.5V23.5" stroke="#34D399" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <div class="leading-none">
+            <div class="flex items-center gap-2">
+              <span class="text-base font-extrabold tracking-tight text-white">Ride<span class="text-emerald-400">Pulse</span></span>
+              <span class="px-1.5 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-widest bg-emerald-500/15 text-emerald-400 border border-emerald-500/25">Live</span>
+            </div>
+            <p class="hidden sm:block text-[10px] font-medium tracking-wide text-slate-400 mt-1">TRANSIT CROWDING &amp; DISPATCH</p>
+          </div>
+        </a>
+
+        <div class="hidden lg:flex items-center gap-2 pl-3.5 ml-1 border-l border-white/10 text-[11px] text-slate-400">
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+          <span id="nav-routes-count" class="mono text-slate-300">108</span>
+          <span>routes synced</span>
+        </div>
+      </div>
+
+      <!-- Center: Segmented Mode Switcher -->
+      <div class="inline-flex items-center rounded-xl bg-white/[0.04] p-1 border border-white/10 shadow-inner">
+        <button id="mode-commuter-btn" type="button" class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-emerald-500 text-slate-950 shadow-sm transition">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M8 6v6m8-6v6M4 10h16M6 18h12a2 2 0 002-2V7a3 3 0 00-3-3H7a3 3 0 00-3 3v9a2 2 0 002 2z"/>
+          </svg>
+          <span>Rider App</span>
+        </button>
+        <button id="mode-operator-btn" type="button" class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold text-slate-300 hover:text-white transition">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h10M4 18h14"/>
+          </svg>
+          <span>Dispatch Control</span>
+        </button>
+      </div>
+
+      <!-- Right: Quick Search & ML Engine -->
+      <div class="flex items-center gap-2">
+        <button id="nav-quick-search" type="button" class="hidden md:inline-flex items-center gap-2 px-2.5 py-1.5 rounded-xl bg-white/[0.03] hover:bg-white/[0.07] border border-white/10 text-[11px] text-slate-400 hover:text-slate-200 transition">
+          <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <circle cx="11" cy="11" r="8"/><path stroke-linecap="round" d="m21 21-4.3-4.3"/>
+          </svg>
+          <span>Quick Find</span>
+          <kbd class="px-1.5 py-0.5 text-[10px] mono bg-white/5 border border-white/10 rounded text-slate-400">/</kbd>
+        </button>
+
+        <button id="open-engine-btn" type="button" class="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 text-xs font-medium text-slate-200 transition">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 transit-pulse"></span>
+          <span class="hidden sm:inline text-slate-400 text-[11px]">Engine</span>
+          <span id="engine-pill-text" class="mono text-[11px] font-semibold text-emerald-300">R² 0.94</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Floating Toast -->
+  <div id="toast" class="hidden fixed bottom-5 right-5 z-50 rounded-xl px-4 py-3 text-xs font-semibold shadow-2xl border backdrop-blur-md"></div>
+
+  <!-- ==================== 1. RIDER APP ==================== -->
+  <main id="view-commuter" class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 space-y-5">
+
+    <!-- Command Search & Trip Controls -->
+    <div class="bento rounded-2xl p-4 relative z-30">
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-3 items-center">
+        <!-- Stop Command Search -->
+        <div class="lg:col-span-5 relative">
+          <div class="flex items-center gap-2.5 bg-[#090D16] focus-within:ring-2 focus-within:ring-emerald-500/70 rounded-xl px-3.5 py-2.5 border border-white/10 transition">
+            <svg class="w-4 h-4 text-emerald-400 shrink-0" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+              <circle cx="11" cy="11" r="8"/><path stroke-linecap="round" d="m21 21-4.3-4.3"/>
+            </svg>
+            <input
+              id="stop-search-input"
+              type="text"
+              autocomplete="off"
+              placeholder="Search stop or route (e.g. Manav Chowk, R102)..."
+              class="w-full bg-transparent text-sm font-medium text-white placeholder:text-slate-500 focus:outline-none"
+            />
+            <kbd class="hidden sm:inline-block px-1.5 py-0.5 text-[10px] font-semibold text-slate-400 bg-white/5 border border-white/10 rounded">/</kbd>
+            <button id="clear-search-btn" type="button" class="hidden text-xs font-semibold text-slate-400 hover:text-white">Clear</button>
+          </div>
+          <!-- Autocomplete Dropdown -->
+          <div id="stop-dropdown" class="hidden absolute left-0 right-0 mt-2 bg-[#0F1523] rounded-xl border border-white/15 shadow-2xl max-h-72 overflow-y-auto z-50 divide-y divide-white/5"></div>
+        </div>
+
+        <!-- Trip Parameters -->
+        <div class="lg:col-span-7 flex flex-wrap items-center gap-2.5">
+          <div class="flex items-center gap-2 bg-[#090D16] border border-white/10 rounded-xl px-3 py-2 text-xs">
+            <span class="text-slate-400">Day</span>
+            <select id="commuter-day" class="bg-transparent font-semibold text-white focus:outline-none cursor-pointer [&>option]:bg-[#0F1523]">
+              <option>Monday</option><option>Tuesday</option><option>Wednesday</option>
+              <option>Thursday</option><option>Friday</option><option>Saturday</option><option>Sunday</option>
+            </select>
+          </div>
+
+          <div class="inline-flex rounded-xl bg-[#090D16] border border-white/10 p-1 text-xs" id="weather-pills">
+            <button type="button" data-weather="Clear" class="w-pill px-3 py-1 rounded-lg font-semibold bg-white/10 text-white transition">Clear</button>
+            <button type="button" data-weather="Cloudy" class="w-pill px-3 py-1 rounded-lg font-semibold text-slate-400 hover:text-white transition">Cloudy</button>
+            <button type="button" data-weather="Rain" class="w-pill px-3 py-1 rounded-lg font-semibold text-slate-400 hover:text-white transition">Rain</button>
+          </div>
+
+          <div class="flex items-center gap-2 bg-[#090D16] border border-white/10 rounded-xl px-3 py-2 text-xs">
+            <span class="text-slate-400">Bus</span>
+            <select id="commuter-capacity" class="bg-transparent font-semibold text-white focus:outline-none cursor-pointer [&>option]:bg-[#0F1523]">
+              <option value="">Typical</option>
+              <option value="45">45-seat</option>
+              <option value="50">50-seat</option>
+              <option value="55">55-seat</option>
+              <option value="60">60-seat</option>
+            </select>
+          </div>
+
+          <div class="flex items-center gap-2 bg-[#090D16] border border-white/10 rounded-xl px-3 py-2 text-xs">
+            <span class="text-slate-400">Time</span>
+            <select id="commuter-time" class="bg-transparent font-semibold text-white focus:outline-none cursor-pointer mono [&>option]:bg-[#0F1523]">
+              <option value="07:15">07:15</option>
+              <option value="07:30" selected>07:30</option>
+              <option value="07:45">07:45</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Quick Stop Chips -->
+      <div id="quick-stops-bar" class="mt-3 pt-3 border-t border-white/5 flex items-center gap-2 overflow-x-auto text-xs">
+        <span class="text-slate-500 font-medium shrink-0">Trending stops:</span>
+      </div>
+    </div>
+
+    <!-- Bento Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-5">
+
+      <!-- Left 7 Cols: Hero Forecast + Vector Bus Cabin -->
+      <div class="lg:col-span-7 bento rounded-2xl p-6 flex flex-col justify-between space-y-6">
+        <!-- Stop Header + Crowd Meter -->
+        <div class="flex flex-wrap items-start justify-between gap-4">
+          <div class="flex items-center gap-3.5">
+            <div id="c-route-badge" class="px-3.5 py-2 rounded-xl bg-gradient-to-br from-emerald-400 to-teal-500 text-slate-950 font-extrabold text-base tracking-tight mono shadow-lg shadow-emerald-500/20">
+              R102
+            </div>
+            <div>
+              <div class="flex items-center gap-2">
+                <h1 id="c-stop-name" class="text-xl sm:text-2xl font-bold tracking-tight text-white">Manav Chowk</h1>
+                <span id="c-stop-id" class="px-2 py-0.5 rounded bg-white/5 border border-white/10 text-[11px] mono text-slate-400">R102_S01</span>
+              </div>
+              <p id="c-subline" class="text-xs text-slate-400 mt-1">Monday · 07:30 · Clear</p>
+            </div>
+          </div>
+
+          <div class="flex items-center gap-2.5 bg-white/[0.04] px-3.5 py-2 rounded-xl border border-white/10">
+            <div id="crowd-icons" class="flex items-center gap-0.5"></div>
+            <span id="c-crowd-pill" class="text-xs font-bold">—</span>
+          </div>
+        </div>
+
+        <!-- Telemetry Row + Radial Load Gauge -->
+        <div class="grid grid-cols-1 sm:grid-cols-12 gap-4 items-center bento-inner rounded-2xl p-4">
+          <!-- Radial SVG Arc Gauge -->
+          <div class="sm:col-span-4 flex items-center gap-4">
+            <div class="relative w-20 h-20 shrink-0">
+              <svg class="w-20 h-20 -rotate-90" viewBox="0 0 80 80">
+                <circle cx="40" cy="40" r="32" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="7" />
+                <circle id="load-gauge-arc" class="gauge-arc" cx="40" cy="40" r="32" fill="none" stroke="#10B981" stroke-width="7" stroke-linecap="round" stroke-dasharray="201.06" stroke-dashoffset="201.06" />
+              </svg>
+              <div class="absolute inset-0 flex flex-col items-center justify-center">
+                <span id="c-occ" class="text-base font-extrabold mono text-white">—%</span>
+              </div>
+            </div>
+            <div>
+              <div class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Bus Load</div>
+              <div id="c-load-tier" class="text-xs font-semibold text-slate-300 mt-0.5">—</div>
+            </div>
+          </div>
+
+          <div class="sm:col-span-4 sm:border-l sm:border-white/10 sm:pl-4">
+            <div class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Expected Riders</div>
+            <div class="mt-1 flex items-baseline gap-1.5">
+              <span id="c-pax" class="text-3xl font-extrabold text-white mono tabular-nums">—</span>
+              <span id="c-cap-sub" class="text-xs font-medium text-slate-400">/ — seats</span>
+            </div>
+          </div>
+
+          <div class="sm:col-span-4 sm:border-l sm:border-white/10 sm:pl-4">
+            <div class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Est. Delay</div>
+            <div class="mt-1 flex items-baseline gap-1.5">
+              <span id="c-delay" class="text-3xl font-extrabold text-white mono tabular-nums">—</span>
+              <span class="text-xs font-medium text-slate-400">min</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Vector Bus Cabin Floorplan -->
+        <div class="bento-inner rounded-2xl p-4 space-y-3">
+          <div class="flex items-center justify-between text-xs">
+            <span class="font-bold text-slate-200">Live Cabin Occupancy</span>
+            <span id="c-overflow-note" class="font-semibold mono text-xs"></span>
+          </div>
+
+          <div class="overflow-x-auto pb-1">
+            <svg id="bus-cabin-svg" class="w-full min-w-[460px] h-[132px]" viewBox="0 0 560 132"></svg>
+          </div>
+
+          <div class="flex items-center gap-5 text-[11px] text-slate-400">
+            <span class="inline-flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm bg-slate-700 inline-block"></span> Open Seat</span>
+            <span class="inline-flex items-center gap-1.5"><span id="legend-taken-dot" class="w-2.5 h-2.5 rounded-sm bg-emerald-500 inline-block"></span> Occupied Seat</span>
+            <span id="c-standing-legend" class="hidden ml-auto font-semibold text-rose-400 mono"></span>
+          </div>
+        </div>
+
+        <!-- Contextual Advisory -->
+        <div id="c-advisory-box" class="rounded-xl px-4 py-3 text-xs sm:text-sm font-medium flex items-center gap-3 border">
+          <span id="c-advisory-dot" class="w-2.5 h-2.5 rounded-full shrink-0"></span>
+          <span id="c-advisory-text">—</span>
+        </div>
+      </div>
+
+      <!-- Right 5 Cols: Departures Timeline + Demand Curve -->
+      <div class="lg:col-span-5 bento rounded-2xl p-6 flex flex-col justify-between space-y-5">
+        <div class="space-y-4">
+          <div class="flex items-center justify-between pb-3 border-b border-white/10">
+            <div>
+              <h2 class="text-sm font-bold text-white">Morning Departures</h2>
+              <p class="text-[11px] text-slate-400">Select a departure to inspect cabin load</p>
+            </div>
+            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-[11px] font-semibold text-emerald-400">
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 transit-pulse"></span>
+              ML Forecast
+            </span>
+          </div>
+
+          <!-- Mini SVG Demand Sparkline -->
+          <div class="bento-inner rounded-xl p-3">
+            <div class="flex items-center justify-between text-[11px] text-slate-400 mb-1.5">
+              <span>Departure Load Profile</span>
+              <span id="sparkline-range" class="mono text-slate-300">—</span>
+            </div>
+            <svg id="departure-sparkline" class="w-full h-14" viewBox="0 0 320 56" preserveAspectRatio="none"></svg>
+          </div>
+
+          <!-- Departures List -->
+          <div id="departures-list" class="space-y-2"></div>
+        </div>
+
+        <div class="rounded-xl p-4 bg-emerald-500/10 border border-emerald-500/25">
+          <div class="text-[10px] font-extrabold uppercase tracking-wider text-emerald-400">Smart Ride Recommendation</div>
+          <div id="best-time-text" class="mt-1 text-xs sm:text-sm font-semibold text-emerald-100 leading-relaxed">—</div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- ==================== 2. DISPATCH CONTROL ==================== -->
+  <main id="view-operator" class="hidden flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 space-y-5">
+    <!-- Top Control & Network Health Bar -->
+    <div class="bento rounded-2xl p-4 space-y-4">
+      <div class="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h1 class="text-lg font-bold tracking-tight text-white">Network Dispatch &amp; Capacity Control</h1>
+          <p class="text-xs text-slate-400">Simulate weather/day demand across 108 routes and assign relief buses.</p>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2 text-xs">
+          <select id="op-day" class="rounded-xl bg-[#090D16] border border-white/10 px-3 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500 [&>option]:bg-[#0F1523]">
+            <option>Monday</option><option>Tuesday</option><option>Wednesday</option>
+            <option>Thursday</option><option>Friday</option><option>Saturday</option><option>Sunday</option>
+          </select>
+          <select id="op-weather" class="rounded-xl bg-[#090D16] border border-white/10 px-3 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500 [&>option]:bg-[#0F1523]">
+            <option>Clear</option><option>Cloudy</option><option>Rain</option>
+          </select>
+          <input
+            id="op-search"
+            type="text"
+            placeholder="Filter route or stop..."
+            class="rounded-xl bg-[#090D16] border border-white/10 px-3 py-1.5 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-emerald-500"
+          />
+        </div>
+      </div>
+
+      <!-- Stacked Network Health Proportion Bar + Filter Pills -->
+      <div class="space-y-2.5">
+        <div class="h-2 w-full rounded-full bg-white/5 overflow-hidden flex">
+          <div id="bar-critical" class="h-full bg-rose-500 transition-all duration-500" style="width: 0%"></div>
+          <div id="bar-high" class="h-full bg-amber-500 transition-all duration-500" style="width: 0%"></div>
+          <div id="bar-normal" class="h-full bg-emerald-500 transition-all duration-500" style="width: 0%"></div>
+        </div>
+        <div class="flex flex-wrap items-center gap-2 text-xs">
+          <button type="button" class="op-filter-btn px-3 py-1.5 rounded-lg font-semibold bg-white text-slate-950 ring-2 ring-white/30" data-filter="all">
+            All (<span id="op-count-all">0</span>)
+          </button>
+          <button type="button" class="op-filter-btn px-3 py-1.5 rounded-lg font-semibold bg-rose-500/15 text-rose-300 border border-rose-500/30" data-filter="Critical">
+            Critical &gt;100% (<span id="op-critical">0</span>)
+          </button>
+          <button type="button" class="op-filter-btn px-3 py-1.5 rounded-lg font-semibold bg-amber-500/15 text-amber-300 border border-amber-500/30" data-filter="High">
+            High 80–100% (<span id="op-high">0</span>)
+          </button>
+          <button type="button" class="op-filter-btn px-3 py-1.5 rounded-lg font-semibold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30" data-filter="Normal">
+            Normal (<span id="op-normal">0</span>)
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Split-Screen Console -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+      <div class="lg:col-span-8 bento rounded-2xl overflow-hidden">
+        <div class="max-h-[620px] overflow-y-auto">
+          <table class="w-full text-xs text-left">
+            <thead class="sticky top-0 bg-[#0B101B] text-[11px] uppercase tracking-wider text-slate-400 border-b border-white/10">
+              <tr>
+                <th class="px-4 py-3">Route / Stop</th>
+                <th class="px-3 py-3 text-right">Forecast</th>
+                <th class="px-4 py-3">Load Factor</th>
+                <th class="px-3 py-3 text-center">Severity</th>
+                <th class="px-4 py-3 text-right">Action</th>
+              </tr>
+            </thead>
+            <tbody id="op-table-body" class="divide-y divide-white/5"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Inspector -->
+      <div class="lg:col-span-4 bento rounded-2xl p-5 space-y-5 sticky top-20">
+        <div class="flex items-start justify-between gap-2 pb-3 border-b border-white/10">
+          <div>
+            <span id="insp-route" class="px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-400 mono text-[11px] font-bold border border-emerald-500/25">Route —</span>
+            <h2 id="insp-stop" class="mt-2 text-lg font-bold text-white">Select a route</h2>
+            <p id="insp-meta" class="text-xs text-slate-400">Click any row to simulate relief dispatch</p>
+          </div>
+          <span id="insp-sev" class="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-white/10 text-slate-300">—</span>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div class="bento-inner rounded-xl p-3.5">
+            <div class="text-[11px] text-slate-400">Current Load</div>
+            <div id="insp-curr-occ" class="mt-1 text-2xl font-extrabold text-rose-400 mono">—%</div>
+            <div id="insp-curr-cap" class="text-[11px] text-slate-500">— seats</div>
+          </div>
+          <div class="bento-inner rounded-xl p-3.5 border-emerald-500/30">
+            <div class="text-[11px] text-slate-400">After Dispatch</div>
+            <div id="insp-opt-occ" class="mt-1 text-2xl font-extrabold text-emerald-400 mono">—%</div>
+            <div id="insp-opt-cap" class="text-[11px] text-slate-400">—</div>
+          </div>
+        </div>
+
+        <div class="space-y-3 text-xs bento-inner rounded-xl p-4">
+          <div class="flex justify-between items-center">
+            <span class="text-slate-400">Recommended Action</span>
+            <span id="insp-action" class="font-bold text-white">—</span>
+          </div>
+          <div class="flex justify-between items-center">
+            <span class="text-slate-400">Expected Riders</span>
+            <span id="insp-pax" class="font-bold mono text-white">—</span>
+          </div>
+          <div class="flex justify-between items-center">
+            <span class="text-slate-400">Historical Avg Delay</span>
+            <span id="insp-delay" class="font-bold mono text-amber-300">—</span>
+          </div>
+        </div>
+
+        <button id="insp-dispatch-btn" type="button" class="w-full py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs shadow-lg shadow-emerald-500/20 transition">
+          Assign Recommended Fleet
+        </button>
+      </div>
+    </div>
+  </main>
+
+  <!-- Slide-over ML Engine Drawer -->
+  <div id="engine-drawer" class="hidden fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-sm">
+    <div class="bg-[#0D121E] text-slate-100 border-l border-white/10 w-full max-w-lg h-full shadow-2xl p-6 overflow-y-auto space-y-5">
+      <div class="flex items-center justify-between border-b border-white/10 pb-3">
+        <div>
+          <h3 class="text-base font-bold text-white">ML Prediction Engine</h3>
+          <p id="drawer-dataset-meta" class="text-xs text-slate-400">Bus_Passenger_Count_Model_Evaluation.ipynb</p>
+        </div>
+        <button id="close-engine-btn" type="button" class="px-2.5 py-1 rounded-lg text-xs font-semibold bg-white/10 hover:bg-white/15">Close</button>
+      </div>
+
+      <div class="bento-inner rounded-xl p-4 text-xs space-y-1.5">
+        <div class="font-semibold text-white">Active Notebook Pipeline</div>
+        <div id="drawer-split-info" class="text-slate-400">—</div>
+        <div id="drawer-multi-info" class="text-emerald-400 font-semibold">—</div>
+      </div>
+
+      <div>
+        <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">Experiment A — Single-Feature &amp; 5-Fold TimeSeries CV</h4>
+        <div class="overflow-x-auto bento-inner rounded-xl">
+          <table class="w-full text-xs text-left">
+            <thead class="bg-white/5 text-slate-400 border-b border-white/10">
+              <tr>
+                <th class="px-3 py-2">Model</th>
+                <th class="px-2 py-2 text-right">RMSE</th>
+                <th class="px-2 py-2 text-right">CV RMSE</th>
+                <th class="px-3 py-2 text-right">R²</th>
+              </tr>
+            </thead>
+            <tbody id="drawer-metrics-body" class="divide-y divide-white/5"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="pt-2 border-t border-white/10">
+        <label class="block text-xs font-semibold text-slate-300 mb-2">Upload New Dataset (.csv / .xlsx) to Retrain</label>
+        <input id="retrain-input" type="file" accept=".csv,.xlsx,.xls" class="block w-full text-xs text-slate-400 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-emerald-500/20 file:text-emerald-300 hover:file:bg-emerald-500/30" />
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const appState = {
+      stops: [],
+      selectedStopId: null,
+      weather: "Clear",
+      operatorRoutes: [],
+      opFilter: "all",
+      selectedOpStopId: null,
+      dispatchedStops: new Set(),
+    };
+
+    function showToast(msg, isError = false) {
+      const el = document.getElementById("toast");
+      el.textContent = msg;
+      el.className = `fixed bottom-5 right-5 z-50 rounded-xl px-4 py-3 text-xs font-semibold shadow-2xl border backdrop-blur-md ${
+        isError ? "bg-rose-950/90 text-rose-100 border-rose-500/50" : "bg-[#0D121E]/95 text-emerald-300 border-emerald-500/40"
+      }`;
+      el.classList.remove("hidden");
+      setTimeout(() => el.classList.add("hidden"), 4000);
+    }
+
+    async function api(url, opts) {
+      const res = await fetch(url, opts);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: res.statusText }));
+        throw new Error(err.detail || "Request failed");
+      }
+      return res.json();
+    }
+
+    function renderCrowdIcons(occPct) {
+      const count = occPct > 95 ? 3 : occPct > 60 ? 2 : 1;
+      const color = occPct > 100 ? "#F43F5E" : occPct > 80 ? "#F59E0B" : "#10B981";
+      let html = "";
+      for (let i = 0; i < 3; i++) {
+        const active = i < count;
+        html += `<svg class="w-4 h-4" viewBox="0 0 24 24" fill="${active ? color : "rgba(255,255,255,0.18)"}">
+          <path d="M12 12a4 4 0 100-8 4 4 0 000 8zm0 2c-3.33 0-6 1.67-6 3.75V20h12v-2.25C18 15.67 15.33 14 12 14z"/>
+        </svg>`;
+      }
+      document.getElementById("crowd-icons").innerHTML = html;
+    }
+
+    function updateLoadGauge(occPct) {
+      const arc = document.getElementById("load-gauge-arc");
+      const circumference = 201.06;
+      const clamped = Math.min(100, Math.max(0, occPct));
+      arc.style.strokeDashoffset = circumference - (clamped / 100) * circumference;
+      arc.style.stroke = occPct > 100 ? "#F43F5E" : occPct > 80 ? "#F59E0B" : "#10B981";
+    }
+
+    function renderBusCabinSVG(capacity, predictedPax) {
+      const svg = document.getElementById("bus-cabin-svg");
+      const occPct = (predictedPax / Math.max(capacity, 1)) * 100;
+      const fillColor = occPct > 100 ? "#F43F5E" : occPct > 80 ? "#F59E0B" : "#10B981";
+      document.getElementById("legend-taken-dot").style.backgroundColor = fillColor;
+
+      const cols = Math.ceil(capacity / 4);
+      const filled = Math.min(capacity, Math.max(0, predictedPax));
+      const overflow = Math.max(0, predictedPax - capacity);
+
+      const startX = 72;
+      const availW = 472;
+      const stepX = Math.min(30, availW / Math.max(cols, 1));
+      const seatW = Math.max(14, stepX - 6);
+      const rowY = [16, 36, 80, 100];
+
+      let seatsSvg = "";
+      for (let c = 0; c < cols; c++) {
+        for (let r = 0; r < 4; r++) {
+          const idx = c * 4 + r;
+          if (idx >= capacity) break;
+          const taken = idx < filled;
+          const x = startX + c * stepX;
+          const y = rowY[r];
+          seatsSvg += `
+            <g>
+              <rect x="${x}" y="${y}" width="${seatW}" height="15" rx="4" fill="${taken ? fillColor : "#1E293B"}" fill-opacity="${taken ? "0.92" : "1"}" stroke="${taken ? "rgba(255,255,255,0.22)" : "rgba(255,255,255,0.08)"}" stroke-width="1"/>
+              <rect x="${x + seatW - 4}" y="${y + 2}" width="3" height="11" rx="1.5" fill="rgba(0,0,0,0.28)"/>
+            </g>
+          `;
+        }
+      }
+
+      const aisleText = overflow > 0
+        ? `<text x="308" y="70" text-anchor="middle" fill="#FB7185" font-size="11" font-family="JetBrains Mono, monospace" font-weight="700">+${overflow} STANDING IN AISLE</text>`
+        : `<text x="308" y="70" text-anchor="middle" fill="#475569" font-size="10" font-family="JetBrains Mono, monospace">CENTRAL AISLE</text>`;
+
+      svg.innerHTML = `
+        <!-- Bus Outer Body -->
+        <rect x="4" y="6" width="552" height="120" rx="22" fill="#0B101B" stroke="rgba(255,255,255,0.14)" stroke-width="1.5"/>
+        <!-- Windshield Curve -->
+        <path d="M 18 20 Q 8 66 18 112" fill="none" stroke="rgba(56,189,248,0.45)" stroke-width="3" stroke-linecap="round"/>
+        <!-- Driver Cab -->
+        <rect x="26" y="16" width="32" height="40" rx="8" fill="#131C2E" stroke="rgba(255,255,255,0.08)"/>
+        <circle cx="42" cy="36" r="8" fill="none" stroke="#64748B" stroke-width="2"/>
+        <text x="42" y="74" text-anchor="middle" fill="#64748B" font-size="9" font-family="JetBrains Mono, monospace" font-weight="700">DRV</text>
+        <!-- Central Aisle -->
+        <line x1="68" y1="66" x2="542" y2="66" stroke="rgba(255,255,255,0.05)" stroke-dasharray="4 4"/>
+        ${aisleText}
+        ${seatsSvg}
+      `;
+
+      const note = document.getElementById("c-overflow-note");
+      note.textContent = overflow > 0 ? `+${overflow} over capacity` : `${capacity - filled} seats open`;
+      note.style.color = overflow > 0 ? "#FB7185" : "#34D399";
+    }
+
+    function renderDepartureSparkline(departures, capacity) {
+      const svg = document.getElementById("departure-sparkline");
+      if (!departures || departures.length === 0) {
+        svg.innerHTML = "";
+        return;
+      }
+      const vals = departures.map((d) => d.expected_passengers);
+      const minV = Math.min(...vals, capacity * 0.4);
+      const maxV = Math.max(...vals, capacity * 1.05);
+      const span = Math.max(1, maxV - minV);
+      const w = 320, h = 56, pad = 6;
+
+      const pts = departures.map((d, i) => {
+        const x = departures.length === 1 ? w / 2 : pad + (i / (departures.length - 1)) * (w - pad * 2);
+        const y = h - pad - ((d.expected_passengers - minV) / span) * (h - pad * 2);
+        return { x, y, v: d.expected_passengers };
+      });
+
+      const linePath = pts.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(" ");
+      const areaPath = `${linePath} L ${pts[pts.length - 1].x.toFixed(1)} ${h} L ${pts[0].x.toFixed(1)} ${h} Z`;
+      const capY = h - pad - ((capacity - minV) / span) * (h - pad * 2);
+
+      svg.innerHTML = `
+        <defs>
+          <linearGradient id="sparkGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#10B981" stop-opacity="0.35"/>
+            <stop offset="100%" stop-color="#10B981" stop-opacity="0"/>
+          </linearGradient>
+        </defs>
+        ${capY >= 0 && capY <= h ? `<line x1="0" y1="${capY.toFixed(1)}" x2="${w}" y2="${capY.toFixed(1)}" stroke="rgba(244,63,94,0.45)" stroke-dasharray="3 3" stroke-width="1"/>` : ""}
+        <path d="${areaPath}" fill="url(#sparkGrad)"/>
+        <path d="${linePath}" fill="none" stroke="#10B981" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+        ${pts.map((p) => `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="3" fill="#34D399"/>`).join("")}
+      `;
+      document.getElementById("sparkline-range").textContent =
+        `${Math.round(Math.min(...vals))}–${Math.round(Math.max(...vals))} pax`;
+    }
+
+    function selectStop(stopId) {
+      const stop = appState.stops.find((s) => s.Stop_ID === stopId);
+      if (!stop) return;
+      appState.selectedStopId = stopId;
+      document.getElementById("stop-search-input").value = `${stop.Stop_Name} (R${stop.Route_ID})`;
+      document.getElementById("clear-search-btn").classList.remove("hidden");
+      document.getElementById("stop-dropdown").classList.add("hidden");
+      loadCommuterForecast();
+    }
+
+    function renderStopDropdown(query = "") {
+      const dd = document.getElementById("stop-dropdown");
+      const q = query.trim().toLowerCase();
+      const matches = appState.stops
+        .filter(
+          (s) =>
+            !q ||
+            s.Stop_Name.toLowerCase().includes(q) ||
+            String(s.Route_ID).toLowerCase().includes(q) ||
+            s.Stop_ID.toLowerCase().includes(q)
+        )
+        .slice(0, 14);
+
+      if (!matches.length) {
+        dd.innerHTML = `<div class="px-4 py-3 text-xs text-slate-400">No matching stops found.</div>`;
+        return;
+      }
+
+      dd.innerHTML = matches
+        .map(
+          (s) => `
+          <button type="button" data-sid="${s.Stop_ID}" class="w-full text-left px-4 py-2.5 hover:bg-white/5 flex items-center justify-between text-xs transition">
+            <div>
+              <span class="font-semibold text-white">${s.Stop_Name}</span>
+              <span class="ml-1.5 text-slate-500 mono">${s.Stop_ID}</span>
+            </div>
+            <span class="px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/20 font-bold mono">R${s.Route_ID}</span>
+          </button>
+        `
+        )
+        .join("");
+
+      dd.querySelectorAll("button[data-sid]").forEach((btn) => {
+        btn.addEventListener("click", () => selectStop(btn.dataset.sid));
+      });
+    }
+
+    async function loadCommuterForecast() {
+      if (!appState.selectedStopId) return;
+      const cap = document.getElementById("commuter-capacity").value;
+      const day = document.getElementById("commuter-day").value;
+      const time = document.getElementById("commuter-time").value;
+
+      const params = new URLSearchParams({
+        stop_id: appState.selectedStopId,
+        day,
+        weather: appState.weather,
+        departure_time: time,
+      });
+      if (cap) params.set("bus_capacity", cap);
+
+      const data = await api(`/api/product/commuter?${params.toString()}`);
+      document.getElementById("c-route-badge").textContent = `R${data.stop.Route_ID}`;
+      document.getElementById("c-stop-name").textContent = data.stop.Stop_Name;
+      document.getElementById("c-stop-id").textContent = data.stop.Stop_ID;
+      document.getElementById("c-subline").textContent = `${data.day} · ${data.departure_time} · ${data.weather}`;
+
+      document.getElementById("c-pax").textContent = data.predicted_passengers;
+      document.getElementById("c-cap-sub").textContent = `/ ${data.bus_capacity} seats`;
+      const occEl = document.getElementById("c-occ");
+      occEl.textContent = `${data.occupancy_percentage}%`;
+      document.getElementById("c-delay").textContent = `+${data.expected_delay}`;
+
+      updateLoadGauge(data.occupancy_percentage);
+      renderCrowdIcons(data.occupancy_percentage);
+
+      const pill = document.getElementById("c-crowd-pill");
+      const tierEl = document.getElementById("c-load-tier");
+      const advBox = document.getElementById("c-advisory-box");
+      const advDot = document.getElementById("c-advisory-dot");
+
+      if (data.occupancy_percentage > 100) {
+        pill.textContent = "Packed · Expect Wait";
+        pill.className = "text-xs font-bold text-rose-400";
+        tierEl.textContent = "Over Capacity";
+        advBox.className = "rounded-xl px-4 py-3 text-xs sm:text-sm font-medium flex items-center gap-3 border bg-rose-500/10 border-rose-500/25 text-rose-200";
+        advDot.style.backgroundColor = "#F43F5E";
+      } else if (data.occupancy_percentage > 80) {
+        pill.textContent = "Standing Only";
+        pill.className = "text-xs font-bold text-amber-400";
+        tierEl.textContent = "Near Capacity";
+        advBox.className = "rounded-xl px-4 py-3 text-xs sm:text-sm font-medium flex items-center gap-3 border bg-amber-500/10 border-amber-500/25 text-amber-200";
+        advDot.style.backgroundColor = "#F59E0B";
+      } else {
+        pill.textContent = "Seats Available";
+        pill.className = "text-xs font-bold text-emerald-400";
+        tierEl.textContent = "Comfortable";
+        advBox.className = "rounded-xl px-4 py-3 text-xs sm:text-sm font-medium flex items-center gap-3 border bg-emerald-500/10 border-emerald-500/25 text-emerald-200";
+        advDot.style.backgroundColor = "#10B981";
+      }
+      document.getElementById("c-advisory-text").textContent = data.advisory;
+
+      renderBusCabinSVG(data.bus_capacity, data.predicted_passengers);
+      renderDepartureSparkline(data.departures, data.bus_capacity);
+
+      const activeTime = document.getElementById("commuter-time").value;
+      document.getElementById("departures-list").innerHTML = data.departures
+        .map((d) => {
+          const dotColor = d.occupancy_percentage > 100 ? "#F43F5E" : d.occupancy_percentage > 80 ? "#F59E0B" : "#10B981";
+          const isActive = d.scheduled_time === activeTime;
+          return `
+            <button type="button" data-dep-time="${d.scheduled_time}" class="dep-row w-full text-left flex items-center justify-between px-3.5 py-2.5 rounded-xl border transition text-xs ${
+              isActive
+                ? "bg-emerald-500/15 border-emerald-500/40"
+                : "bg-white/[0.03] hover:bg-white/[0.06] border-white/5"
+            }">
+              <div class="flex items-center gap-3">
+                <span class="font-bold text-sm text-white mono">${d.scheduled_time}</span>
+                <span class="text-slate-400 tabular-nums">~${Math.round(d.expected_passengers)} riders · +${d.avg_delay}m</span>
+              </div>
+              <span class="inline-flex items-center gap-1.5 font-semibold text-slate-200">
+                <span class="w-2 h-2 rounded-full" style="background:${dotColor}"></span>
+                ${d.status}
+              </span>
+            </button>
+          `;
+        })
+        .join("");
+
+      document.querySelectorAll(".dep-row").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const t = btn.dataset.depTime;
+          const timeSel = document.getElementById("commuter-time");
+          if (![...timeSel.options].some((o) => o.value === t)) {
+            timeSel.add(new Option(t, t));
+          }
+          timeSel.value = t;
+          loadCommuterForecast();
+        });
+      });
+
+      if (data.best_departure) {
+        document.getElementById("best-time-text").textContent =
+          `Catch the ${data.best_departure.scheduled_time} departure (~${Math.round(
+            data.best_departure.expected_passengers
+          )} riders, ${data.best_departure.occupancy_percentage}% load) for your best chance at a seat.`;
+      }
+    }
+
+    function selectOperatorRoute(stopId) {
+      const r = appState.operatorRoutes.find((x) => x.Stop_ID === stopId);
+      if (!r) return;
+      appState.selectedOpStopId = stopId;
+      document.getElementById("insp-route").textContent = `Route ${r.Route_ID}`;
+      document.getElementById("insp-stop").textContent = r.Stop_Name;
+      document.getElementById("insp-meta").textContent = `${r.Stop_ID} · Historical stop profile`;
+      document.getElementById("insp-curr-occ").textContent = `${r.current_occupancy}%`;
+      document.getElementById("insp-curr-cap").textContent = `${r.current_capacity}-seat bus`;
+      document.getElementById("insp-opt-occ").textContent = `${r.optimized_occupancy}%`;
+      document.getElementById("insp-opt-cap").textContent = `${r.buses_needed}× ${r.recommended_capacity}-seat`;
+      document.getElementById("insp-action").textContent = r.action;
+      document.getElementById("insp-pax").textContent = `${r.predicted_passengers} riders`;
+      document.getElementById("insp-delay").textContent = `+${r.avg_delay} min`;
+
+      const sevEl = document.getElementById("insp-sev");
+      sevEl.textContent = r.severity;
+      sevEl.className =
+        r.severity === "Critical"
+          ? "px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-500/20 text-rose-300"
+          : r.severity === "High"
+          ? "px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-500/20 text-amber-300"
+          : "px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/20 text-emerald-300";
+
+      const btn = document.getElementById("insp-dispatch-btn");
+      const done = appState.dispatchedStops.has(r.Stop_ID);
+      btn.textContent = done ? "Fleet Assigned (Click to Undo)" : "Assign Recommended Fleet";
+      btn.className = done
+        ? "w-full py-2.5 rounded-xl bg-white/10 text-white font-bold text-xs transition"
+        : "w-full py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs shadow-lg shadow-emerald-500/20 transition";
+      renderOperatorTable();
+    }
+
+    function renderOperatorTable() {
+      const q = document.getElementById("op-search").value.trim().toLowerCase();
+      const rows = appState.operatorRoutes.filter((r) => {
+        if (appState.opFilter !== "all" && r.severity !== appState.opFilter) return false;
+        if (
+          q &&
+          !r.Stop_Name.toLowerCase().includes(q) &&
+          !String(r.Route_ID).toLowerCase().includes(q) &&
+          !r.Stop_ID.toLowerCase().includes(q)
+        ) return false;
+        return true;
+      });
+
+      document.getElementById("op-table-body").innerHTML = rows
+        .map((r) => {
+          const isSel = r.Stop_ID === appState.selectedOpStopId;
+          const barColor = r.severity === "Critical" ? "#F43F5E" : r.severity === "High" ? "#F59E0B" : "#10B981";
+          const dispatched = appState.dispatchedStops.has(r.Stop_ID);
+          return `
+            <tr data-op-id="${r.Stop_ID}" class="cursor-pointer transition ${isSel ? "bg-white/[0.08]" : "hover:bg-white/[0.04]"} ${dispatched ? "opacity-50" : ""}">
+              <td class="px-4 py-2.5">
+                <div class="font-semibold text-white">R${r.Route_ID} · ${r.Stop_Name}</div>
+                <div class="text-[11px] text-slate-500 mono">${r.Stop_ID}</div>
+              </td>
+              <td class="px-3 py-2.5 text-right mono font-semibold text-slate-200">${r.predicted_passengers} / ${r.current_capacity}</td>
+              <td class="px-4 py-2.5 min-w-[140px]">
+                <div class="flex items-center gap-2">
+                  <div class="flex-1 h-1.5 bg-white/10 rounded-full overflow-hidden">
+                    <div class="h-full rounded-full" style="width:${Math.min(100, r.current_occupancy)}%; background:${barColor}"></div>
+                  </div>
+                  <span class="mono text-[11px] font-bold" style="color:${barColor}">${r.current_occupancy}%</span>
+                </div>
+              </td>
+              <td class="px-3 py-2.5 text-center">
+                <span class="text-[11px] font-bold" style="color:${barColor}">${r.severity}</span>
+              </td>
+              <td class="px-4 py-2.5 text-right text-[11px] font-semibold text-slate-300">
+                ${dispatched ? "Assigned" : r.action}
+              </td>
+            </tr>
+          `;
+        })
+        .join("");
+
+      document.querySelectorAll("tr[data-op-id]").forEach((tr) => {
+        tr.addEventListener("click", () => selectOperatorRoute(tr.dataset.opId));
+      });
+    }
+
+    async function loadOperatorDispatch() {
+      const day = document.getElementById("op-day").value;
+      const weather = document.getElementById("op-weather").value;
+      const data = await api(`/api/product/operator?day=${encodeURIComponent(day)}&weather=${encodeURIComponent(weather)}`);
+      const total = Math.max(1, data.summary.total_routes);
+      document.getElementById("op-count-all").textContent = data.summary.total_routes;
+      document.getElementById("op-critical").textContent = data.summary.critical_routes;
+      document.getElementById("op-high").textContent = data.summary.high_load_routes;
+      document.getElementById("op-normal").textContent = data.summary.normal_routes;
+
+      document.getElementById("bar-critical").style.width = `${(data.summary.critical_routes / total) * 100}%`;
+      document.getElementById("bar-high").style.width = `${(data.summary.high_load_routes / total) * 100}%`;
+      document.getElementById("bar-normal").style.width = `${(data.summary.normal_routes / total) * 100}%`;
+
+      appState.operatorRoutes = data.routes;
+      if (!appState.selectedOpStopId && data.routes.length) {
+        selectOperatorRoute(data.routes[0].Stop_ID);
+      } else {
+        renderOperatorTable();
+      }
+    }
+
+    async function loadEngineDrawer() {
+      const [ov, models] = await Promise.all([api("/api/overview"), api("/api/models")]);
+      document.getElementById("engine-pill-text").textContent = `R² ${ov.best_model.R2.toFixed(2)}`;
+      document.getElementById("drawer-dataset-meta").textContent =
+        `${ov.dataset_name} (${ov.total_trips.toLocaleString()} trips · ${ov.unique_stops} stops)`;
+      document.getElementById("drawer-split-info").textContent =
+        `Best Single-Feature: ${ov.best_model.Model} · ${ov.split_ratio} (${ov.train_size.toLocaleString()} train / ${ov.test_size.toLocaleString()} test)`;
+      if (ov.multi_regression && ov.multi_regression.R2 != null) {
+        document.getElementById("drawer-multi-info").textContent =
+          `Experiment B (Live Product Engine): ${ov.multi_regression.Model} · R² ${ov.multi_regression.R2.toFixed(4)} · RMSE ${ov.multi_regression.RMSE.toFixed(3)}`;
+      }
+      document.getElementById("drawer-metrics-body").innerHTML = models.metrics
+        .map(
+          (m) => `
+          <tr class="${m.is_best ? "bg-emerald-500/10 font-semibold" : ""}">
+            <td class="px-3 py-2 text-white">${m.Model}</td>
+            <td class="px-2 py-2 text-right mono text-slate-300">${m.RMSE.toFixed(3)}</td>
+            <td class="px-2 py-2 text-right mono text-slate-400">${m.CV_RMSE_Mean.toFixed(3)} ± ${m.CV_RMSE_Std.toFixed(2)}</td>
+            <td class="px-3 py-2 text-right mono text-emerald-400">${m.R2.toFixed(4)}</td>
+          </tr>
+        `
+        )
+        .join("");
+    }
+
+    async function init() {
+      const stopsRes = await api("/api/stops");
+      appState.stops = stopsRes.stops;
+      document.getElementById("nav-routes-count").textContent = stopsRes.total;
+
+      const quickBar = document.getElementById("quick-stops-bar");
+      quickBar.innerHTML =
+        `<span class="text-slate-500 font-medium shrink-0">Trending stops:</span>` +
+        appState.stops
+          .slice(0, 5)
+          .map(
+            (s) =>
+              `<button type="button" data-qsid="${s.Stop_ID}" class="shrink-0 px-2.5 py-1 rounded-lg bg-white/[0.04] hover:bg-white/[0.09] border border-white/10 text-slate-300 hover:text-white font-medium transition">${s.Stop_Name}</button>`
+          )
+          .join("");
+      quickBar.querySelectorAll("button[data-qsid]").forEach((b) => {
+        b.addEventListener("click", () => selectStop(b.dataset.qsid));
+      });
+
+      if (appState.stops.length) {
+        selectStop(appState.stops[0].Stop_ID);
+      }
+      await Promise.all([loadOperatorDispatch(), loadEngineDrawer()]);
+    }
+
+    // Mode switching
+    document.getElementById("mode-commuter-btn").addEventListener("click", () => {
+      document.getElementById("view-commuter").classList.remove("hidden");
+      document.getElementById("view-operator").classList.add("hidden");
+      document.getElementById("mode-commuter-btn").className = "inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-emerald-500 text-slate-950 shadow-sm transition";
+      document.getElementById("mode-operator-btn").className = "inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold text-slate-300 hover:text-white transition";
+    });
+    document.getElementById("mode-operator-btn").addEventListener("click", () => {
+      document.getElementById("view-operator").classList.remove("hidden");
+      document.getElementById("view-commuter").classList.add("hidden");
+      document.getElementById("mode-operator-btn").className = "inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-emerald-500 text-slate-950 shadow-sm transition";
+      document.getElementById("mode-commuter-btn").className = "inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold text-slate-300 hover:text-white transition";
+    });
+    document.getElementById("nav-quick-search").addEventListener("click", () => {
+      document.getElementById("mode-commuter-btn").click();
+      document.getElementById("stop-search-input").focus();
+    });
+
+    // Search autocomplete + keyboard shortcut '/'
+    const searchInput = document.getElementById("stop-search-input");
+    const dropdown = document.getElementById("stop-dropdown");
+    searchInput.addEventListener("focus", () => {
+      renderStopDropdown("");
+      dropdown.classList.remove("hidden");
+    });
+    searchInput.addEventListener("input", (e) => {
+      renderStopDropdown(e.target.value);
+      dropdown.classList.remove("hidden");
+    });
+    searchInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        const firstBtn = dropdown.querySelector("button[data-sid]");
+        if (firstBtn) {
+          e.preventDefault();
+          selectStop(firstBtn.dataset.sid);
+        }
+      } else if (e.key === "Escape") {
+        dropdown.classList.add("hidden");
+      }
+    });
+    document.getElementById("clear-search-btn").addEventListener("click", () => {
+      searchInput.value = "";
+      searchInput.focus();
+      renderStopDropdown("");
+      dropdown.classList.remove("hidden");
+    });
+    document.addEventListener("click", (e) => {
+      if (!searchInput.contains(e.target) && !dropdown.contains(e.target)) {
+        dropdown.classList.add("hidden");
+      }
+    });
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "/" && document.activeElement.tagName !== "INPUT" && document.activeElement.tagName !== "SELECT") {
+        e.preventDefault();
+        searchInput.focus();
+      } else if (e.key === "Escape") {
+        document.getElementById("engine-drawer").classList.add("hidden");
+      }
+    });
+
+    // Weather pills
+    document.querySelectorAll(".w-pill").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        appState.weather = btn.dataset.weather;
+        document.querySelectorAll(".w-pill").forEach((b) => {
+          b.className =
+            b === btn
+              ? "w-pill px-3 py-1 rounded-lg font-semibold bg-white/10 text-white transition"
+              : "w-pill px-3 py-1 rounded-lg font-semibold text-slate-400 hover:text-white transition";
+        });
+        loadCommuterForecast();
+      });
+    });
+
+    document.getElementById("commuter-day").addEventListener("change", loadCommuterForecast);
+    document.getElementById("commuter-capacity").addEventListener("change", loadCommuterForecast);
+    document.getElementById("commuter-time").addEventListener("change", loadCommuterForecast);
+
+    // Operator events
+    document.querySelectorAll(".op-filter-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        appState.opFilter = btn.dataset.filter;
+        document.querySelectorAll(".op-filter-btn").forEach((b) => {
+          b.classList.remove("ring-2", "ring-white/30");
+        });
+        btn.classList.add("ring-2", "ring-white/30");
+        renderOperatorTable();
+      });
+    });
+    document.getElementById("op-search").addEventListener("input", renderOperatorTable);
+    document.getElementById("op-day").addEventListener("change", loadOperatorDispatch);
+    document.getElementById("op-weather").addEventListener("change", loadOperatorDispatch);
+    document.getElementById("insp-dispatch-btn").addEventListener("click", () => {
+      const id = appState.selectedOpStopId;
+      if (!id) return;
+      if (appState.dispatchedStops.has(id)) appState.dispatchedStops.delete(id);
+      else {
+        appState.dispatchedStops.add(id);
+        showToast("Relief fleet assigned");
+      }
+      selectOperatorRoute(id);
+    });
+
+    // Drawer events
+    document.getElementById("open-engine-btn").addEventListener("click", () => {
+      document.getElementById("engine-drawer").classList.remove("hidden");
+    });
+    document.getElementById("close-engine-btn").addEventListener("click", () => {
+      document.getElementById("engine-drawer").classList.add("hidden");
+    });
+    document.getElementById("retrain-input").addEventListener("change", async (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      const fd = new FormData();
+      fd.append("file", file);
+      try {
+        await api("/api/retrain", { method: "POST", body: fd });
+        await init();
+        showToast(`Retrained RidePulse on ${file.name}`);
+      } catch (err) {
+        showToast(err.message, true);
+      } finally {
+        e.target.value = "";
+      }
+    });
+
+    init().catch((err) => showToast(err.message, true));
+  </script>
+</body>
+</html>
